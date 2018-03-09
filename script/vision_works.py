@@ -45,9 +45,11 @@ class Extract_center:
         self.bbox_h_init = None
         self.bbox_h_prev = None
 
-        self.linear_speed_x = 0.3
-        self.k_yaw = 0.0005
-        self.k_alt = 0.0005
+        self.linear_speed_x = 0.6
+        # self.k_yaw = 0.0005
+        # self.k_alt = 0.0005
+        self.k_yaw = 0.0008
+        self.k_alt = 0.0008
 
         self.image_sub = rospy.Subscriber("/rexrov/rexrov/camera/camera_image",Image,self.callback)
         self.jerk_sub = rospy.Subscriber("/jerk",Float32,self.jerk_callback)
