@@ -15,6 +15,8 @@ from sensor_msgs.msg import Image
 import geometry_msgs.msg as geometry_msgs
 from cv_bridge import CvBridge, CvBridgeError
 
+buoy_hit = False
+
 class Extract_center:
     def __init__(self):
         # self.image_pub = rospy.Publisher("image_topic_2",Image)
@@ -45,7 +47,7 @@ class Extract_center:
         self.bbox_h_init = None
         self.bbox_h_prev = None
 
-        self.linear_speed_x = 0.6
+        self.linear_speed_x = 0.55
         # self.k_yaw = 0.0005
         # self.k_alt = 0.0005
         self.k_yaw = 0.0008
@@ -258,6 +260,7 @@ class Extract_center:
         jerk = msg.data
         if jerk > 1.5:
             self.hit_buoy = True
+            buoy_hit = True
             self.target_follower("backward")
 
 def main(args):
