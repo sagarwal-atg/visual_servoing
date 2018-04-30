@@ -8,6 +8,8 @@ import cv2
 import CMT
 import numpy as np
 import util
+import smach
+import smach_ros
 
 from rospy.numpy_msg import numpy_msg
 from std_msgs.msg import String, Float32
@@ -17,7 +19,8 @@ from cv_bridge import CvBridge, CvBridgeError
 
 buoy_hit = False
 
-class Extract_center:
+class Extract_center(smach.State):
+# class Extract_center():
     def __init__(self):
         # self.image_pub = rospy.Publisher("image_topic_2",Image)
         self.CMT = CMT.CMT()
@@ -47,16 +50,25 @@ class Extract_center:
         self.bbox_h_init = None
         self.bbox_h_prev = None
 
-        self.linear_speed_x = 0.55
-        # self.k_yaw = 0.0005
-        # self.k_alt = 0.0005
-        self.k_yaw = 0.0008
-        self.k_alt = 0.0008
+        self.linear_speed_x = 0.35
+        self.k_yaw = 0.0005
+        self.k_alt = 0.0005
+        # self.k_yaw = 0.0008
+        # self.k_alt = 0.0008
 
         self.image_sub = rospy.Subscriber("/rexrov/rexrov/camera/camera_image",Image,self.callback)
         self.jerk_sub = rospy.Subscriber("/jerk",Float32,self.jerk_callback)
 
         self.des_vel_pub = rospy.Publisher("/rexrov/cmd_vel", numpy_msg(geometry_msgs.Twist), queue_size=1)
+
+        smach.State.__init__(self, outcomes=['hit', 'in_pursuit'])
+
+    def execute(self, userdata):
+        rospy.loginfo('Buoy Ramming')
+        if self.hit_buoy:
+            return 'hit'
+        else: 
+            return 'in_pursuit'
 
     def tem_match(self, orig, src, templ):
         img = src
@@ -217,7 +229,7 @@ class Extract_center:
             br = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
             cv2.rectangle(frame, tl, br, (255,0,0), 2, 1)
             self.bbox_h = bbox[2]/2
-            self.time_to_contact()
+            # self.time_to_contact()
         else :
             print("Tracking failure")
             cv2.putText(frame, "Tracking failure detected", (100,80), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,255),2)
