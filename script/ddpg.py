@@ -1,10 +1,10 @@
-""" 
+"""
 Implementation of DDPG - Deep Deterministic Policy Gradient
 
-Algorithm and hyperparameter details can be found here: 
+Algorithm and hyperparameter details can be found here:
     http://arxiv.org/pdf/1509.02971v2.pdf
 
-The algorithm is tested on the Pendulum-v0 OpenAI gym task 
+The algorithm is tested on the Pendulum-v0 OpenAI gym task
 and developed with tflearn + Tensorflow
 
 Author: Patrick Emami
@@ -115,7 +115,7 @@ class ActorNetwork(object):
 
 class CriticNetwork(object):
     """
-    Input to the network is the state and action, output is Q(s,a).
+    Input to the network is the state and actitrainon, output is Q(s,a).
     The action must be obtained from the output of the Actor network.
 
     """
@@ -266,7 +266,7 @@ def train(sess, env, args, actor, critic, actor_noise):
     # Initialize replay memory
     replay_buffer = ReplayBuffer(int(args['buffer_size']), int(args['random_seed']))
 
-    # Needed to enable BatchNorm. 
+    # Needed to enable BatchNorm.
     # This hurts the performance on Pendulum but could be useful
     # in other environments.
     # tflearn.is_training(True)
@@ -364,7 +364,7 @@ def main(args):
                                float(args['critic_lr']), float(args['tau']),
                                float(args['gamma']),
                                actor.get_num_trainable_vars())
-        
+
         actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim))
 
         if args['use_gym_monitor']:
@@ -402,9 +402,9 @@ if __name__ == '__main__':
 
     parser.set_defaults(render_env=False)
     parser.set_defaults(use_gym_monitor=True)
-    
+
     args = vars(parser.parse_args())
-    
+
     pp.pprint(args)
 
     main(args)

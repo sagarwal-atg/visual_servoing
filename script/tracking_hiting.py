@@ -78,15 +78,15 @@ class Tracking_Hitting(smach.State):
 			self.got_bbox = False
 			return 'hit'
 		else:
-			print("*************************************")
-			print(self.hit_buoy)
-			print(self.buoy_counter)
-			print(self.hit_buoy_red)
-			print(self.hit_buoy_yellow)
-			print(self.hit_buoy_green)
-			print(self.first)
-			print(userdata.tracker_bbox_in)
-			print("*************************************")
+			# print("*************************************")
+			# print(self.hit_buoy)
+			# print(self.buoy_counter)
+			# print(self.hit_buoy_red)
+			# print(self.hit_buoy_yellow)
+			# print(self.hit_buoy_green)
+			# print(self.first)
+			# print(userdata.tracker_bbox_in)
+			# print("*************************************")
 			self.hit_buoy = False
 			self.init_bbox = userdata.tracker_bbox_in
 			self.got_bbox = True
@@ -147,6 +147,8 @@ class Tracking_Hitting(smach.State):
 			msg.linear.z = 0
 			msg.angular.z = 0
 
+		print("Message")
+		print(msg)
 		self.des_vel_pub.publish(msg)
 
 	def opencv_tracker(self,img):
