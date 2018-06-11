@@ -33,6 +33,8 @@ class sub_env():
         self.action_dim = 1
         self.action_bound = 1.0
 
+        rospy.init_node('sub_env', anonymous=True)
+
     def step(self, yaw):
         msg = geometry_msgs.Twist()
         msg.linear.x = self.linear_speed
@@ -54,11 +56,12 @@ class sub_env():
         img = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
         # self.image = cv2.resize(img, (0,0), fx=0.2, fy=0.2)
         self.image = cv2.resize(img, (100,75))
-        cv2.imshow("img", self.image )
+        # cv2.imshow("img", self.image )
         # print(self.image.flatten().shape)
         # print(self.image.shape)
         # cv2.waitKey(30)
-        print(self.process())
+        # print(self.process())
+        self.state = self.image.flatten()
 
     def process(self):
         self.terminal = False
@@ -79,7 +82,7 @@ class sub_env():
 
 
 def main(args):
-    ec = sub_env()
+    # ec = sub_env()
     rospy.init_node('sub_env', anonymous=True)
     try:
         rospy.spin()

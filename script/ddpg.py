@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """
 Implementation of DDPG - Deep Deterministic Policy Gradient
 
@@ -18,6 +20,7 @@ import argparse
 import pprint as pp
 
 from replay_buffer import ReplayBuffer
+from submarine_ddpg import sub_env
 
 # ===========================
 #   Actor and Critic DNNs
@@ -251,7 +254,7 @@ def build_summaries():
 #   Agent Training
 # ===========================
 
-def train(sess, env, args, actor, critic, actor_noise):
+def train(sess, sub_e, args, actor, critic, actor_noise):
 
     # Set up summary Ops
     summary_ops, summary_vars = build_summaries()
@@ -269,25 +272,30 @@ def train(sess, env, args, actor, critic, actor_noise):
     # Needed to enable BatchNorm.
     # This hurts the performance on Pendulum but could be useful
     # in other environments.
-    # tflearn.is_training(True)
+    tflearn.is_training(True)
 
     for i in range(int(args['max_episodes'])):
 
-        s = env.reset()
+        # s = env.reset()
+        s = sub_e.state
 
         ep_reward = 0
         ep_ave_max_q = 0
 
         for j in range(int(args['max_episode_len'])):
 
-            if args['render_env']:
-                env.render()
+            # if args['render_env']:
+            #     env.render()
 
             # Added exploration noise
             #a = actor.predict(np.reshape(s, (1, 3))) + (1. / (1. + i))
+            print("HERE")
+            print(s.shape)
             a = actor.predict(np.reshape(s, (1, actor.s_dim))) + actor_noise()
 
-            s2, r, terminal, info = env.step(a[0])
+            sub_e.step(a[0])
+
+            s2, r, terminal = sub_e.process()
 
             replay_buffer.add(np.reshape(s, (actor.s_dim,)), np.reshape(a, (actor.a_dim,)), r,
                               terminal, np.reshape(s2, (actor.s_dim,)))
@@ -343,18 +351,27 @@ def train(sess, env, args, actor, critic, actor_noise):
 
 def main(args):
 
+    # rospy.init_node('asdasdasdasdsa', anonymous=True)
     with tf.Session() as sess:
 
-        env = gym.make(args['env'])
+        # env = gym.make(args['env'])
+        sub_e = sub_env()
         np.random.seed(int(args['random_seed']))
         tf.set_random_seed(int(args['random_seed']))
-        env.seed(int(args['random_seed']))
+        # env.seed(int(args['random_seed']))
 
-        state_dim = env.observation_space.shape[0]
-        action_dim = env.action_space.shape[0]
-        action_bound = env.action_space.high
+
+
+        # state_dim = env.observation_space.shape[0]
+        # action_dim = env.action_space.shape[0]
+        # action_bound = env.action_space.high
+
+        state_dim = sub_e.state_dim
+        action_dim = sub_e.action_dim
+        action_bound = sub_e.action_bound
+
         # Ensure action bound is symmetric
-        assert (env.action_space.high == -env.action_space.low)
+        # assert (env.action_space.high == -env.action_space.low)
 
         actor = ActorNetwork(sess, state_dim, action_dim, action_bound,
                              float(args['actor_lr']), float(args['tau']),
@@ -367,17 +384,17 @@ def main(args):
 
         actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim))
 
-        if args['use_gym_monitor']:
-            if not args['render_env']:
-                env = wrappers.Monitor(
-                    env, args['monitor_dir'], video_callable=False, force=True)
-            else:
-                env = wrappers.Monitor(env, args['monitor_dir'], force=True)
+        # if args['use_gym_monitor']:
+        #     if not args['render_env']:
+        #         env = wrappers.Monitor(
+        #             env, args['monitor_dir'], video_callable=False, force=True)
+        #     else:
+        #         env = wrappers.Monitor(env, args['monitor_dir'], force=True)
 
-        train(sess, env, args, actor, critic, actor_noise)
+        train(sess, sub_e, args, actor, critic, actor_noise)
 
-        if args['use_gym_monitor']:
-            env.monitor.close()
+        # if args['use_gym_monitor']:
+        #     env.monitor.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='provide arguments for DDPG agent')
@@ -393,7 +410,7 @@ if __name__ == '__main__':
     # run parameters
     parser.add_argument('--env', help='choose the gym env- tested on {Pendulum-v0}', default='Pendulum-v0')
     parser.add_argument('--random-seed', help='random seed for repeatability', default=1234)
-    parser.add_argument('--max-episodes', help='max num of episodes to do while training', default=50000)
+    parser.add_argument('--max-episodes', help='max num of episodes to do while training', default=500000)
     parser.add_argument('--max-episode-len', help='max length of 1 episode', default=1000)
     parser.add_argument('--render-env', help='render the gym env', action='store_true')
     parser.add_argument('--use-gym-monitor', help='record gym results', action='store_true')
