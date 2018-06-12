@@ -289,8 +289,8 @@ def train(sess, sub_e, args, actor, critic, actor_noise):
 
             # Added exploration noise
             #a = actor.predict(np.reshape(s, (1, 3))) + (1. / (1. + i))
-            print("HERE")
-            print(s.shape)
+            # print("HERE")
+            # print(s.shape)
             a = actor.predict(np.reshape(s, (1, actor.s_dim))) + actor_noise()
 
             sub_e.step(a[0])
