@@ -8,6 +8,9 @@ import cv2
 import numpy as np
 import time
 
+import tf.transformations as tf_transform
+
+
 from rospy.numpy_msg import numpy_msg
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image
@@ -15,14 +18,17 @@ import geometry_msgs.msg as geometry_msgs
 from std_msgs.msg import  Float32
 from nav_msgs.msg import Odometry
 from gazebo_msgs.msg import ModelState
+from std_msgs.msg import  Float32
 
 
 class sub_env():
     def __init__(self):
+
         self.image_sub = rospy.Subscriber("/rexrov/rexrov/camera/camera_image",Image, self.image_callback)
         self.des_vel_pub = rospy.Publisher("/rexrov/cmd_vel", numpy_msg(geometry_msgs.Twist), queue_size=1)
         self.pose_sub = rospy.Subscriber("/rexrov/pose_gt",Odometry, self.pose_callback)
         self.model_state_pub = rospy.Publisher('/gazebo/set_model_state', ModelState, queue_size=1)
+        self.jerk_sub = rospy.Subscriber("/jerk",Float32,self.jerk_callback)
 
         self.position = np.array([0.,0.,0.])
         self.image = None
@@ -32,13 +38,27 @@ class sub_env():
         self.terminal = None
         self.state = None
 
+        self.hit = False
+
         self.state_dim = 100*75
         self.action_dim = 1
-        self.action_bound = 1.0
+        self.action_bound = 0.5
 
-        # rospy.init_node('sub_env', anonymous=True)
+        self.now = time.time()
+
+        rospy.init_node('sub_env', anonymous=True)
+        # rospy.spin()
+
+    def jerk_callback(self, msg):
+		jerk = msg.data
+		if jerk > 1.5:
+			self.hit = True
+
+    def timeout(self):
+        return time.time() > self.now + 150
 
     def step(self, yaw):
+        # print(yaw)
         msg = geometry_msgs.Twist()
         msg.linear.x = self.linear_speed
         msg.angular.z = yaw
@@ -51,7 +71,12 @@ class sub_env():
         self.position[2] = pos.z
         # print(self.position)
 
+    def starting_region_check(self):
+        if -9.5 > self.position[0] > -10.5 and -29.5 > self.position[1] > -30.5:
+            return True
+
     def image_callback(self, data):
+        # print("Recieved Image")
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         except CvBridgeError as e:
@@ -68,23 +93,28 @@ class sub_env():
 
     def reset(self):
         msg = ModelState()
-        msg.model_name = data.name[1]
+        quaternion = tf_transform.quaternion_from_euler(0,0,135)
 
-        data.pose[1].position.x = -10.0
-        data.pose[1].position.y = -30.0
-        data.pose[1].position.z = -45.0
+        msg.model_name = "rexrov"
 
-        data.pose[1].orientation.x = -0.000220201445241
-        data.pose[1].orientation.y = 4.16686
-        data.pose[1].orientation.z = 0.999021
-        data.pose[1].orientation.w = 0.0442268
+        msg.pose.position.x = -10.0
+        msg.pose.position.y = -30.0
+        msg.pose.position.z = -45.0
 
-        msg.pose = data.pose[1]
-        msg.twist = data.twist[1]
-        # print(msg)
-        model_state_pub.publish(msg)
+        msg.pose.orientation.x = quaternion[0]
+        msg.pose.orientation.y = quaternion[1]
+        msg.pose.orientation.z = quaternion[2]
+        msg.pose.orientation.w = quaternion[3]
+
+        self.hit = False
+
+        self.model_state_pub.publish(msg)
 
         time.sleep(1)
+
+        self.curr_time = time.time() - self.now
+
+        self.now = time.time()
 
     def process(self):
         self.terminal = False
@@ -92,32 +122,43 @@ class sub_env():
         self.reward = 0
 
         # checking y
-        if self.position[1] < -40 or self.position[1] > -20:
+        if self.position[1] < -35 or self.position[1] > -15:
             self.reward = -1
             self.terminal = True
-
-        # checking x
-        if self.position[0] < -33 or self.position[0] > -10:
-            self.reward = -1
-            self.terminal = True
+            print("Y dimension exceeded")
 
         # checking z
-        if -31 < self.position[0] < -29 and -26 < self.position[1] < -24:
+        if self.position[2] < -46 or self.position[2] > -44:
+            self.reward = -1
+            self.terminal = True
+            print("Z dimension exceeded")
+
+        # checking x
+        if self.position[0] < -23 or self.position[0] > -9:
+            self.reward = -1
+            self.terminal = True
+            print("X dimension exceeded")
+
+        if self.timeout():
+            self.reward = -1
+            self.terminal = True
+            print("Timeout " + str(time.time() - self.now))
+
+        # checking buoy
+        if -21 < self.position[0] < -19 and -26 < self.position[1] < -24:
             self.reward = 5
             print("Buoy Hit")
             self.terminal = True
 
+        time_now = time.time() - self.now
+
+        if self.hit and time_now > 10.0:
+            self.reward = 5
+            print("Buoy Hit: Jerk")
+            print(self.position)
+            self.terminal = True
+
+        # print(self.state, self.reward, self.terminal)
+        # print(self.position)
+
         return self.state, self.reward, self.terminal
-
-
-def main(args):
-    # ec = sub_env()
-    rospy.init_node('sub_env', anonymous=True)
-    try:
-        rospy.spin()
-    except KeyboardInterrupt:
-        print("Shutting down")
-        cv2.destroyAllWindows()
-
-if __name__ == '__main__':
-    main(sys.argv)

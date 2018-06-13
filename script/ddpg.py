@@ -18,6 +18,7 @@ from gym import wrappers
 import tflearn
 import argparse
 import pprint as pp
+import time
 
 from replay_buffer import ReplayBuffer
 from submarine_ddpg import sub_env
@@ -274,7 +275,20 @@ def train(sess, sub_e, args, actor, critic, actor_noise):
     # in other environments.
     tflearn.is_training(True)
 
+    saver = tf.train.Saver()
+    sess.run(tf.initialize_all_variables())
+    checkpoint = tf.train.get_checkpoint_state("saved_networks_q_learning")
+    if checkpoint and checkpoint.model_checkpoint_path:
+        saver.restore(sess, checkpoint.model_checkpoint_path)
+        print("Successfully loaded:", checkpoint.model_checkpoint_path)
+    else:
+        print("Could not find old network weights")
+
+
     for i in range(int(args['max_episodes'])):
+
+        if i % 100 == 0:
+            saver.save(sess, 'saved_networks_q_learning/' + 'buoy_training' + '-dqn', global_step=i)
 
         # s = env.reset()
         s = sub_e.state
@@ -293,6 +307,7 @@ def train(sess, sub_e, args, actor, critic, actor_noise):
             # print(s.shape)
             a = actor.predict(np.reshape(s, (1, actor.s_dim))) + actor_noise()
 
+            # print("step")
             sub_e.step(a[0])
 
             s2, r, terminal = sub_e.process()
@@ -346,7 +361,7 @@ def train(sess, sub_e, args, actor, critic, actor_noise):
                 writer.flush()
 
                 sub_e.reset()
-
+                print(sub_e.curr_time)
                 print('| Reward: {:d} | Episode: {:d} | Qmax: {:.4f}'.format(int(ep_reward), \
                         i, (ep_ave_max_q / float(j))))
                 break
@@ -362,6 +377,7 @@ def main(args):
         tf.set_random_seed(int(args['random_seed']))
         # env.seed(int(args['random_seed']))
 
+        time.sleep(1)
 
 
         # state_dim = env.observation_space.shape[0]
