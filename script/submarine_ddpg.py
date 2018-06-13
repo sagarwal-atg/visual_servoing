@@ -33,7 +33,7 @@ class sub_env():
         self.action_dim = 1
         self.action_bound = 1.0
 
-        rospy.init_node('sub_env', anonymous=True)
+        # rospy.init_node('sub_env', anonymous=True)
 
     def step(self, yaw):
         msg = geometry_msgs.Twist()
