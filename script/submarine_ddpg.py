@@ -6,6 +6,7 @@ import rospy
 import sys
 import cv2
 import numpy as np
+import time
 
 from rospy.numpy_msg import numpy_msg
 from cv_bridge import CvBridge, CvBridgeError
@@ -13,6 +14,7 @@ from sensor_msgs.msg import Image
 import geometry_msgs.msg as geometry_msgs
 from std_msgs.msg import  Float32
 from nav_msgs.msg import Odometry
+from gazebo_msgs.msg import ModelState
 
 
 class sub_env():
@@ -20,6 +22,7 @@ class sub_env():
         self.image_sub = rospy.Subscriber("/rexrov/rexrov/camera/camera_image",Image, self.image_callback)
         self.des_vel_pub = rospy.Publisher("/rexrov/cmd_vel", numpy_msg(geometry_msgs.Twist), queue_size=1)
         self.pose_sub = rospy.Subscriber("/rexrov/pose_gt",Odometry, self.pose_callback)
+        self.model_state_pub = rospy.Publisher('/gazebo/set_model_state', ModelState, queue_size=1)
 
         self.position = np.array([0.,0.,0.])
         self.image = None
@@ -63,19 +66,45 @@ class sub_env():
         # print(self.process())
         self.state = self.image.flatten()
 
+    def reset(self):
+        msg = ModelState()
+        msg.model_name = data.name[1]
+
+        data.pose[1].position.x = -10.0
+        data.pose[1].position.y = -30.0
+        data.pose[1].position.z = -45.0
+
+        data.pose[1].orientation.x = -0.000220201445241
+        data.pose[1].orientation.y = 4.16686
+        data.pose[1].orientation.z = 0.999021
+        data.pose[1].orientation.w = 0.0442268
+
+        msg.pose = data.pose[1]
+        msg.twist = data.twist[1]
+        # print(msg)
+        model_state_pub.publish(msg)
+
+        time.sleep(1)
+
     def process(self):
         self.terminal = False
         self.state = self.image.flatten()
         self.reward = 0
+
         # checking y
         if self.position[1] < -40 or self.position[1] > -20:
             self.reward = -1
             self.terminal = True
-        if self.position[0] < -33:
-            self.reward = -2
+
+        # checking x
+        if self.position[0] < -33 or self.position[0] > -10:
+            self.reward = -1
             self.terminal = True
+
+        # checking z
         if -31 < self.position[0] < -29 and -26 < self.position[1] < -24:
             self.reward = 5
+            print("Buoy Hit")
             self.terminal = True
 
         return self.state, self.reward, self.terminal
