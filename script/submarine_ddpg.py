@@ -40,8 +40,8 @@ class sub_env():
 
         self.hit = False
 
-        self.state_dim = 100*75
-        self.action_dim = 1
+        self.state_dim = 80*80
+        self.action_dim = 2
         self.action_bound = 0.5
 
         self.now = time.time()
@@ -57,11 +57,14 @@ class sub_env():
     def timeout(self):
         return time.time() > self.now + 150
 
-    def step(self, yaw):
+    def step(self, yaw, depth):
         # print(yaw)
         msg = geometry_msgs.Twist()
         msg.linear.x = self.linear_speed
+
         msg.angular.z = yaw
+        msg.linear.z = depth
+
         self.des_vel_pub.publish(msg)
 
     def pose_callback(self, data):
@@ -83,7 +86,7 @@ class sub_env():
             print(e)
         img = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
         # self.image = cv2.resize(img, (0,0), fx=0.2, fy=0.2)
-        self.image = cv2.resize(img, (100,75))
+        self.image = cv2.resize(img, (80,80))
         # cv2.imshow("img", self.image )
         # print(self.image.flatten().shape)
         # print(self.image.shape)
@@ -128,13 +131,13 @@ class sub_env():
             print("Y dimension exceeded")
 
         # checking z
-        if self.position[2] < -46 or self.position[2] > -44:
+        if self.position[2] < -48 or self.position[2] > -35:
             self.reward = -1
             self.terminal = True
             print("Z dimension exceeded")
 
         # checking x
-        if self.position[0] < -23 or self.position[0] > -9:
+        if self.position[0] < -28 or self.position[0] > -9:
             self.reward = -1
             self.terminal = True
             print("X dimension exceeded")
@@ -145,14 +148,14 @@ class sub_env():
             print("Timeout " + str(time.time() - self.now))
 
         # checking buoy
-        if -21 < self.position[0] < -19 and -26 < self.position[1] < -24:
+        if -26 < self.position[0] < -24 and -26 < self.position[1] < -24:
             self.reward = 5
-            print("Buoy Hit")
+            print("Dice Hit")
             self.terminal = True
 
         time_now = time.time() - self.now
 
-        if self.hit and time_now > 10.0:
+        if self.hit and time_now > 30.0:
             self.reward = 5
             print("Buoy Hit: Jerk")
             print(self.position)

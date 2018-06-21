@@ -13,8 +13,8 @@ Author: Patrick Emami
 """
 import tensorflow as tf
 import numpy as np
-import gym
-from gym import wrappers
+# import gym
+# from gym import wrappers
 import tflearn
 import argparse
 import pprint as pp
@@ -288,7 +288,7 @@ def train(sess, sub_e, args, actor, critic, actor_noise):
     for i in range(int(args['max_episodes'])):
 
         if i % 100 == 0:
-            saver.save(sess, 'saved_networks_q_learning/' + 'buoy_training' + '-dqn', global_step=i)
+            saver.save(sess, 'saved_networks_q_learning/' + 'dice_training' + '-dqn', global_step=i)
 
         # s = env.reset()
         s = sub_e.state
@@ -308,7 +308,8 @@ def train(sess, sub_e, args, actor, critic, actor_noise):
             a = actor.predict(np.reshape(s, (1, actor.s_dim))) + actor_noise()
 
             # print("step")
-            sub_e.step(a[0])
+            print(a)
+            sub_e.step(a[0][0], a[0][1])
 
             s2, r, terminal = sub_e.process()
 
@@ -401,13 +402,6 @@ def main(args):
                                actor.get_num_trainable_vars())
 
         actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim))
-
-        # if args['use_gym_monitor']:
-        #     if not args['render_env']:
-        #         env = wrappers.Monitor(
-        #             env, args['monitor_dir'], video_callable=False, force=True)
-        #     else:
-        #         env = wrappers.Monitor(env, args['monitor_dir'], force=True)
 
         train(sess, sub_e, args, actor, critic, actor_noise)
 
