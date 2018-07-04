@@ -32,7 +32,7 @@ class sub_env():
 
         self.position = np.array([0.,0.,0.])
         self.image = None
-        self.linear_speed = 0.3
+        self.linear_speed = 0.5
         self.bridge = CvBridge()
         self.reward = None
         self.terminal = None
@@ -59,6 +59,11 @@ class sub_env():
 
     def step(self, yaw):
         # print(yaw)
+        if yaw > 0.5:
+            yaw = 0.5
+        elif yaw < -0.5:
+            yaw = -0.5
+
         msg = geometry_msgs.Twist()
         msg.linear.x = self.linear_speed
         msg.angular.z = yaw

@@ -23,6 +23,7 @@ import time
 from replay_buffer import ReplayBuffer
 from submarine_ddpg import sub_env
 
+from vgg16 import vgg16
 # ===========================
 #   Actor and Critic DNNs
 # ===========================
@@ -46,12 +47,12 @@ class ActorNetwork(object):
         self.batch_size = batch_size
 
         # Actor Network
-        self.inputs, self.out, self.scaled_out = self.create_actor_network()
+        self.inputs, self.out, self.scaled_out = self.create_actor_network_pretrained()
 
         self.network_params = tf.trainable_variables()
 
         # Target Network
-        self.target_inputs, self.target_out, self.target_scaled_out = self.create_actor_network()
+        self.target_inputs, self.target_out, self.target_scaled_out = self.create_actor_network_pretrained()
 
         self.target_network_params = tf.trainable_variables()[
             len(self.network_params):]
@@ -93,6 +94,24 @@ class ActorNetwork(object):
         # Scale output to -action_bound to action_bound
         scaled_out = tf.multiply(out, self.action_bound)
         return inputs, out, scaled_out
+
+    def create_actor_network_pretrained(self):
+        inputs = tflearn.input_data(shape=[None, self.s_dim])
+        vgg = vgg16(inputs, 'vgg16_weights.npz', self.sess)
+        # net = tflearn.fully_connected(inputs, 400)
+        # net = tflearn.layers.normalization.batch_normalization(net)
+        # net = tflearn.activations.relu(net)
+        # net = tflearn.fully_connected(net, 300)
+        # net = tflearn.layers.normalization.batch_normalization(net)
+        # net = tflearn.activations.relu(net)
+        # # Final layer weights are init to Uniform[-3e-3, 3e-3]
+        w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
+        out = tflearn.fully_connected(
+            vgg.fc3l, self.a_dim, activation='tanh', weights_init=w_init)
+        # Scale output to -action_bound to action_bound
+        scaled_out = tf.multiply(out, self.action_bound)
+        return inputs, out, scaled_out
+
 
     def train(self, inputs, a_gradient):
         self.sess.run(self.optimize, feed_dict={

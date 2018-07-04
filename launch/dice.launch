@@ -6,7 +6,7 @@
     <include file="$(find gazebo_ros)/launch/empty_world.launch">
         <!-- <arg name="world_name" value="worlds/lake.world"/> -->
         <arg name="world_name" value="worlds/dice.world"/>
-        <arg name="paused" value="false"/>
+        <arg name="paused" value="true"/>
     </include>
 
     <!-- Add the RexROV vehicle to the simulation (namespace: rexrov) -->
@@ -15,6 +15,8 @@
         <arg name="y" default="-30"/>
         <arg name="z" default="-38"/>
         <arg name="yaw" default="135"/>
+        <arg name="roll" default="-0.1"/>
+        <arg name="pitch" default="-0.585"/>
     </include>
 
 

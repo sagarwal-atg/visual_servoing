@@ -7,6 +7,7 @@
         <!-- <arg name="world_name" value="worlds/lake.world"/> -->
         <arg name="world_name" value="worlds/bouy_hitting.world"/>
         <arg name="paused" value="false"/>
+        <arg name="gui" value="false"/>
     </include>
 
     <!-- Add the RexROV vehicle to the simulation (namespace: rexrov) -->
