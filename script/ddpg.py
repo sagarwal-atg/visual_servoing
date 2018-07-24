@@ -23,10 +23,23 @@ import time
 from replay_buffer import ReplayBuffer
 from submarine_ddpg import sub_env
 
-from vgg16 import vgg16
 # ===========================
 #   Actor and Critic DNNs
 # ===========================
+
+def load_graph(frozen_graph_filename):
+    # We load the protobuf file from the disk and parse it to retrieve the
+    # unserialized graph_def
+    with tf.gfile.GFile(frozen_graph_filename, "rb") as f:
+        graph_def = tf.GraphDef()
+        graph_def.ParseFromString(f.read())
+
+    # Then, we import the graph_def into a new Graph and returns it
+    with tf.Graph().as_default() as graph:
+        # The name var will prefix every op/nodes in your graph
+        # Since we load everything in a new graph, this is not needed
+        tf.import_graph_def(graph_def, name="prefix")
+    return graph
 
 class ActorNetwork(object):
     """
@@ -37,7 +50,7 @@ class ActorNetwork(object):
     between -action_bound and action_bound
     """
 
-    def __init__(self, sess, state_dim, action_dim, action_bound, learning_rate, tau, batch_size):
+    def __init__(self, sess, state_dim, action_dim, action_bound, learning_rate, tau, batch_size, vgg_graph):
         self.sess = sess
         self.s_dim = state_dim
         self.a_dim = action_dim
@@ -47,12 +60,12 @@ class ActorNetwork(object):
         self.batch_size = batch_size
 
         # Actor Network
-        self.inputs, self.out, self.scaled_out = self.create_actor_network_pretrained()
+        self.inputs, self.out, self.scaled_out = self.create_actor_network_pretrained(vgg_graph)
 
         self.network_params = tf.trainable_variables()
 
         # Target Network
-        self.target_inputs, self.target_out, self.target_scaled_out = self.create_actor_network_pretrained()
+        self.target_inputs, self.target_out, self.target_scaled_out = self.create_actor_network_pretrained(vgg_graph)
 
         self.target_network_params = tf.trainable_variables()[
             len(self.network_params):]
@@ -95,36 +108,36 @@ class ActorNetwork(object):
         scaled_out = tf.multiply(out, self.action_bound)
         return inputs, out, scaled_out
 
-    def create_actor_network_pretrained(self):
-        inputs = tflearn.input_data(shape=[None, self.s_dim])
-        vgg = vgg16(inputs, 'vgg16_weights.npz', self.sess)
-        # net = tflearn.fully_connected(inputs, 400)
-        # net = tflearn.layers.normalization.batch_normalization(net)
-        # net = tflearn.activations.relu(net)
-        # net = tflearn.fully_connected(net, 300)
-        # net = tflearn.layers.normalization.batch_normalization(net)
-        # net = tflearn.activations.relu(net)
-        # # Final layer weights are init to Uniform[-3e-3, 3e-3]
+    def create_actor_network_pretrained(self, vgg_graph):
+        # inputs = tflearn.input_data(shape=[None, self.s_dim])
+        inputs = vgg_graph.get_tensor_by_name('prefix/Placeholder:0')
+        output_conv = vgg_graph.get_tensor_by_name('prefix/fc2/BiasAdd:0')
+        # vgg = vgg16(inputs, 'vgg16_weights.npz', self.sess)
+        # output_conv_sg = tf.stop_gradient(output_conv)
+        output_conv = tflearn.activations.relu(output_conv)
         w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
         out = tflearn.fully_connected(
-            vgg.fc3l, self.a_dim, activation='tanh', weights_init=w_init)
+            output_conv, self.a_dim, activation='tanh', weights_init=w_init)
         # Scale output to -action_bound to action_bound
         scaled_out = tf.multiply(out, self.action_bound)
         return inputs, out, scaled_out
 
 
     def train(self, inputs, a_gradient):
+        # inputs = tf.reshape(inputs,  [self.batch_size, 224, 224, 3])
         self.sess.run(self.optimize, feed_dict={
             self.inputs: inputs,
             self.action_gradient: a_gradient
         })
 
     def predict(self, inputs):
+        # inputs = tf.reshape(inputs,  [None, 224, 224, 3])
         return self.sess.run(self.scaled_out, feed_dict={
             self.inputs: inputs
         })
 
     def predict_target(self, inputs):
+        # inputs = tf.reshape(inputs,  [None, 224, 224, 3])
         return self.sess.run(self.target_scaled_out, feed_dict={
             self.target_inputs: inputs
         })
@@ -143,7 +156,7 @@ class CriticNetwork(object):
 
     """
 
-    def __init__(self, sess, state_dim, action_dim, learning_rate, tau, gamma, num_actor_vars):
+    def __init__(self, sess, state_dim, action_dim, learning_rate, tau, gamma, num_actor_vars, vgg_graph):
         self.sess = sess
         self.s_dim = state_dim
         self.a_dim = action_dim
@@ -152,12 +165,12 @@ class CriticNetwork(object):
         self.gamma = gamma
 
         # Create the critic network
-        self.inputs, self.action, self.out = self.create_critic_network()
+        self.inputs, self.action, self.out = self.create_critic_network_pretrained(vgg_graph)
 
         self.network_params = tf.trainable_variables()[num_actor_vars:]
 
         # Target Network
-        self.target_inputs, self.target_action, self.target_out = self.create_critic_network()
+        self.target_inputs, self.target_action, self.target_out = self.create_critic_network_pretrained(vgg_graph)
 
         self.target_network_params = tf.trainable_variables()[(len(self.network_params) + num_actor_vars):]
 
@@ -197,6 +210,31 @@ class CriticNetwork(object):
 
         net = tflearn.activation(
             tf.matmul(net, t1.W) + tf.matmul(action, t2.W) + t2.b, activation='relu')
+
+        # linear layer connected to 1 output representing Q(s,a)
+        # Weights are init to Uniform[-3e-3, 3e-3]
+        w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
+        out = tflearn.fully_connected(net, 1, weights_init=w_init)
+        return inputs, action, out
+
+    def create_critic_network_pretrained(self, vgg_graph):
+        # inputs = tflearn.input_data(shape=[None, self.s_dim])
+        # net = tflearn.fully_connected(inputs, 400)
+        # net = tflearn.layers.normalization.batch_normalization(net)
+        # net = tflearn.activations.relu(net)
+
+        inputs = vgg_graph.get_tensor_by_name('prefix/Placeholder:0')
+        output_conv = vgg_graph.get_tensor_by_name('prefix/fc2/BiasAdd:0')
+        output_conv = tflearn.activations.relu(output_conv)
+        # Add the action tensor in the 2nd hidden layer
+        # Use two temp layers to get the corresponding weights and biases
+        t1 = tflearn.fully_connected(output_conv, 300)
+
+        action = tflearn.input_data(shape=[None, self.a_dim])
+        t2 = tflearn.fully_connected(action, 300)
+
+        net = tflearn.activation(
+            tf.matmul(output_conv, t1.W) + tf.matmul(action, t2.W) + t2.b, activation='relu')
 
         # linear layer connected to 1 output representing Q(s,a)
         # Weights are init to Uniform[-3e-3, 3e-3]
@@ -303,7 +341,7 @@ def train(sess, sub_e, args, actor, critic, actor_noise):
     else:
         print("Could not find old network weights")
 
-
+    foo = open("results.txt", "w")
     for i in range(int(args['max_episodes'])):
 
         if i % 100 == 0:
@@ -324,22 +362,23 @@ def train(sess, sub_e, args, actor, critic, actor_noise):
             #a = actor.predict(np.reshape(s, (1, 3))) + (1. / (1. + i))
             # print("HERE")
             # print(s.shape)
-            a = actor.predict(np.reshape(s, (1, actor.s_dim))) + actor_noise()
+
+            a = actor.predict(np.reshape(s, (1,) + actor.s_dim)) + actor_noise()
 
             # print("step")
             sub_e.step(a[0])
 
             s2, r, terminal = sub_e.process()
 
-            replay_buffer.add(np.reshape(s, (actor.s_dim,)), np.reshape(a, (actor.a_dim,)), r,
-                              terminal, np.reshape(s2, (actor.s_dim,)))
+            replay_buffer.add(np.reshape(s, actor.s_dim), np.reshape(a, (actor.a_dim,)), r,
+                              terminal, np.reshape(s2, actor.s_dim))
 
             # Keep adding experience to the memory until
             # there are at least minibatch size samples
             if replay_buffer.size() > int(args['minibatch_size']):
                 s_batch, a_batch, r_batch, t_batch, s2_batch = \
                     replay_buffer.sample_batch(int(args['minibatch_size']))
-
+                # print(s_batch.shape)
                 # Calculate targets
                 target_q = critic.predict_target(
                     s2_batch, actor.predict_target(s2_batch))
@@ -383,12 +422,15 @@ def train(sess, sub_e, args, actor, critic, actor_noise):
                 print(sub_e.curr_time)
                 print('| Reward: {:d} | Episode: {:d} | Qmax: {:.4f}'.format(int(ep_reward), \
                         i, (ep_ave_max_q / float(j))))
+                data_s =  str(int(ep_reward)) + " " +  str(i) + " " + str(ep_ave_max_q / float(j))
+                foo.write(data_s)
                 break
 
 def main(args):
 
     # rospy.init_node('asdasdasdasdsa', anonymous=True)
-    with tf.Session() as sess:
+    graph = load_graph("frozen_model.pb")
+    with tf.Session(graph=graph) as sess:
 
         # env = gym.make(args['env'])
         sub_e = sub_env()
@@ -412,12 +454,12 @@ def main(args):
 
         actor = ActorNetwork(sess, state_dim, action_dim, action_bound,
                              float(args['actor_lr']), float(args['tau']),
-                             int(args['minibatch_size']))
+                             int(args['minibatch_size']), vgg_graph=graph )
 
         critic = CriticNetwork(sess, state_dim, action_dim,
                                float(args['critic_lr']), float(args['tau']),
                                float(args['gamma']),
-                               actor.get_num_trainable_vars())
+                               actor.get_num_trainable_vars(), vgg_graph=graph)
 
         actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim))
 
@@ -442,12 +484,12 @@ if __name__ == '__main__':
     parser.add_argument('--gamma', help='discount factor for critic updates', default=0.99)
     parser.add_argument('--tau', help='soft target update parameter', default=0.001)
     parser.add_argument('--buffer-size', help='max size of the replay buffer', default=1000000)
-    parser.add_argument('--minibatch-size', help='size of minibatch for minibatch-SGD', default=64)
+    parser.add_argument('--minibatch-size', help='size of minibatch for minibatch-SGD', default=32)
 
     # run parameters
     parser.add_argument('--env', help='choose the gym env- tested on {Pendulum-v0}', default='Pendulum-v0')
     parser.add_argument('--random-seed', help='random seed for repeatability', default=1234)
-    parser.add_argument('--max-episodes', help='max num of episodes to do while training', default=500000)
+    parser.add_argument('--max-episodes', help='max num of episodes to do while training', default=5000)
     parser.add_argument('--max-episode-len', help='max length of 1 episode', default=1000)
     parser.add_argument('--render-env', help='render the gym env', action='store_true')
     parser.add_argument('--use-gym-monitor', help='record gym results', action='store_true')

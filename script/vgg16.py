@@ -16,6 +16,7 @@ from imagenet_classes import class_names
 
 class vgg16:
     def __init__(self, imgs, weights=None, sess=None):
+        imgs = tf.reshape(imgs,  [None, 224, 224, 3])
         self.imgs = imgs
         self.convlayers()
         self.fc_layers()
@@ -23,6 +24,7 @@ class vgg16:
         if weights is not None and sess is not None:
             self.load_weights(weights, sess)
 
+        # self.freeze_graph(sess)
 
     def convlayers(self):
         self.parameters = []
@@ -252,15 +254,71 @@ class vgg16:
             print i, k, np.shape(weights[k])
             sess.run(self.parameters[i].assign(weights[k]))
 
+    def freeze_graph(self, sess):
+        # all_saver = tf.train.Saver()
+        # all_saver.save(sess, 'vgg/vgg-saved')
+        # for op in tf.get_default_graph().get_operations():
+        #     print str(op.name)
+        s = [n.name for n in tf.get_default_graph().as_graph_def().node]
+        print(s)
+        output_graph = "frozen_model.pb"
+        # We use a built-in TF helper to export variables to constants
+        output_graph_def = tf.graph_util.convert_variables_to_constants(
+            sess, # The session is used to retrieve the weights
+            tf.get_default_graph().as_graph_def(), # The graph_def is used to retrieve the nodes
+            ['fc2/BiasAdd']
+            # output_node_names.split(",") # The output node names are used to select the usefull nodes
+        )
+
+        # Finally we serialize and dump the output graph to the filesystem
+        with tf.gfile.GFile(output_graph, "wb") as f:
+            f.write(output_graph_def.SerializeToString())
+        print("%d ops in the final graph." % len(output_graph_def.node))
+
+def load_graph(frozen_graph_filename):
+    # We load the protobuf file from the disk and parse it to retrieve the
+    # unserialized graph_def
+    with tf.gfile.GFile(frozen_graph_filename, "rb") as f:
+        graph_def = tf.GraphDef()
+        graph_def.ParseFromString(f.read())
+
+    # Then, we import the graph_def into a new Graph and returns it
+    with tf.Graph().as_default() as graph:
+        # The name var will prefix every op/nodes in your graph
+        # Since we load everything in a new graph, this is not needed
+        tf.import_graph_def(graph_def, name="prefix")
+    return graph
+
 if __name__ == '__main__':
     sess = tf.Session()
     imgs = tf.placeholder(tf.float32, [None, 224, 224, 3])
     vgg = vgg16(imgs, 'vgg16_weights.npz', sess)
 
-    img1 = imread('laska.png', mode='RGB')
-    img1 = imresize(img1, (224, 224))
+       # We use our "load_graph" function
+    # graph = load_graph("frozen_model.pb")
+    #
+    # # We can verify that we can access the list of operations in the graph
+    # for op in graph.get_operations():
+    #     print(op.name)
+    #     # prefix/Placeholder/inputs_placeholder
+    #     # ...
+    #     # prefix/Accuracy/predictions
+    #
+    # # We access the input and output nodes
+    # x = graph.get_tensor_by_name('prefix/Placeholder:0')
+    # # y = graph.get_tensor_by_name('prefix/fc3/MatMul:0')
+    # y = graph.get_tensor_by_name('prefix/Softmax:0')
+    # #
+    # # # We launch a Session
+    # with tf.Session(graph=graph) as sess:
+    #     # Note: we don't nee to initialize/restore anything
+    #     # There is no Variables in this graph, only hardcoded constants
+    #     img1 = imread('buoy.png', mode='RGB')
+    #     img1 = imresize(img1, (224, 224))
+    #     prob = sess.run(y, feed_dict={x: [img1]})[0]
+    #     print(prob) # [[ False ]] Yay, it works!
+    #     preds = (np.argsort(prob)[::-1])[0:5]
+    #     for p in preds:
+    #         print class_names[p], prob[p]
 
-    prob = sess.run(vgg.probs, feed_dict={vgg.imgs: [img1]})[0]
-    preds = (np.argsort(prob)[::-1])[0:5]
-    for p in preds:
-        print class_names[p], prob[p]
+    # print(img1.shape)

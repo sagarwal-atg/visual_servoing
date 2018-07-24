@@ -24,8 +24,8 @@
         <arg name="model_name" value="rexrov"/>
     </include>
 
-    <node pkg="visual_servoing" name="accel_graph" type="accel_graph.py"  output="screen"/>
-    <node pkg="rqt_plot" name="jerk" type="rqt_plot" args="/jerk"/>
+    <!-- <node pkg="visual_servoing" name="accel_graph" type="accel_graph.py"  output="screen"/>
+    <node pkg="rqt_plot" name="jerk" type="rqt_plot" args="/jerk"/> -->
     <!-- Open RViz for visualization of sensor data and visualization markers -->
     <!-- <node name="rviz" pkg="rviz" type="rviz" output="screen" args="-d $(find uuv_gazebo)/rviz/controller_demo.rviz"/> -->
 </launch>
